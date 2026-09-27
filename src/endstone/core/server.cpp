@@ -276,20 +276,22 @@ void EndstoneServer::setLevel(::Level &level)
         },
         Bedrock::PubSub::ConnectPosition::AtBack, nullptr);
 
-    on_map_created_ = static_cast<ServerMapDataManager *>(level.getMapDataManager().get().access())
-                          ->getOnCreateMapSavedDataConnector()
-                          .connect(
-                              [&](const MapItemSavedData &map_data) {
-                                  // The map origin isn't initialized yet at this point.
-                                  // Defer the event to the next tick to ensure all data is fully set.
-                                  getEndstoneScheduler().runTask([this, id = map_data.getMapId().raw_id]() {
-                                      if (auto *map = getMap(id)) {
-                                          MapInitializeEvent e{*map};
-                                          getPluginManager().callEvent(e);
-                                      }
-                                  });
-                              },
-                              Bedrock::PubSub::ConnectPosition::AtBack, nullptr);
+    auto *map_data_manager = static_cast<ServerMapDataManager *>(level.getMapDataManager().get().access());
+    on_map_created_ = map_data_manager->getOnCreateMapSavedDataConnector().connect(
+        [this, map_data_manager](const MapItemSavedData &map_data) {
+            // The map origin isn't initialized yet at this point.
+            // Defer the event to the next tick to ensure all data is fully set.
+            getEndstoneScheduler().runTask([this, map_data_manager, uuid = map_data.getMapId()]() {
+                if (!map_data_manager->getMapDataMap().contains(uuid)) {
+                    return;
+                }
+                if (auto *map = getMap(uuid.raw_id)) {
+                    MapInitializeEvent e{*map};
+                    getPluginManager().callEvent(e);
+                }
+            });
+        },
+        Bedrock::PubSub::ConnectPosition::AtBack, nullptr);
 
     fixServerAnnouncement();
     enablePlugins(PluginLoadOrder::PostWorld);
