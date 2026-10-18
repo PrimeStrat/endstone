@@ -16,13 +16,13 @@
 
 #include <chrono>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <unordered_map>
 #include <vector>
 
 #include "bedrock/core/utility/pub_sub/subscription.h"
-#include "bedrock/deps/nethernet/nethernet_transport.h"
 #include "bedrock/resources/resource_pack_repository_interface.h"
 #include "bedrock/server/server_text_settings.h"
 #include "bedrock/shared_constants.h"
@@ -65,6 +65,7 @@ public:
     [[nodiscard]] Language &getLanguage() const override;
     [[nodiscard]] EndstoneCommandMap &getCommandMap() const;
     [[nodiscard]] PluginManager &getPluginManager() const override;
+    [[nodiscard]] EndstonePluginManager &getEndstonePluginManager() const;
     [[nodiscard]] PluginCommand *getPluginCommand(std::string name) const override;
     [[nodiscard]] ConsoleCommandSender &getCommandSender() const override;
     [[nodiscard]] std::shared_ptr<ConsoleCommandSender> getCommandSenderPtr() const;
@@ -125,13 +126,16 @@ public:
     void setPlayerBoard(EndstonePlayer &player, Scoreboard &scoreboard);
     void removePlayerBoard(EndstonePlayer &player);
 
+    void startTick();
     void tick(std::uint64_t current_tick, const std::function<void()> &tick_function);
+    void endTick();
     void init(ServerInstance &server_instance);
     void setLevel(::Level &level);
     void initRegistries();
     void setResourcePackRepository(IResourcePackRepository &repo);
     [[nodiscard]] const std::string *getContentKey(const PackIdVersion &pack_id) const;
     [[nodiscard]] bool getAllowClientPacks() const;
+    [[nodiscard]] const std::vector<std::string> &getStunServers() const;
     [[nodiscard]] bool logCommands() const;
     [[nodiscard]] bool isServerTextEnabled(ServerTextEvent event) const;
 
@@ -150,7 +154,6 @@ private:
     void fixServerAnnouncement();
     [[nodiscard]] bool isUsingNetherNet() const;
     [[nodiscard]] std::uint16_t getSignalingPort() const;
-    void applyStunConfig() const;
 
     ServerInstance *server_instance_{nullptr};
     Logger &logger_;
@@ -172,16 +175,15 @@ private:
     std::chrono::system_clock::time_point start_time_;
     IResourcePackRepository *resource_pack_repository_ = nullptr;
     std::unordered_map<PackIdVersion, std::string> content_keys_;
-    int tick_counter_ = 0;
-    float current_mspt_ = SharedConstants::MilliSecondsPerTick * 1.0F;
-    float average_mspt_[SharedConstants::TicksPerSecond] = {SharedConstants::MilliSecondsPerTick};
-    float current_tps_ = SharedConstants::TicksPerSecond * 1.0F;
-    float average_tps_[SharedConstants::TicksPerSecond] = {SharedConstants::TicksPerSecond};
-    float current_usage_ = 0.0F;
-    float average_usage_[SharedConstants::TicksPerSecond] = {0.0F};
+    mutable std::mutex stats_lock_;
+    float current_mspt_ = 0.0F;
+    float average_mspt_[SharedConstants::TicksPerSecond] = {};
+    std::size_t tick_index_ = 0;
+    std::chrono::steady_clock::time_point tick_start_;
+    bool tick_pending_ = false;
     // TODO(config): move the following the a separate class/struct
     bool allow_client_packs_ = false;
-    std::vector<NetherNet::StunRelayServer> stun_servers_;
+    std::vector<std::string> stun_servers_;
     bool log_commands_ = true;
     ServerTextSettings text_settings_;
     ::Bedrock::PubSub::Subscription on_gameplay_user_removed_;
