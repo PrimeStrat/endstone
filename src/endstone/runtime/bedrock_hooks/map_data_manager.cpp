@@ -18,11 +18,8 @@ MapItemSavedData *MapDataManager::_loadMapData(const ActorUniqueID &uuid)
     auto *map_data = ENDSTONE_HOOK_CALL_ORIGINAL(&MapDataManager::_loadMapData, this, uuid);
     if (map_data) {
         auto &server = endstone::core::EndstoneServer::getInstance();
-        server.getEndstoneScheduler().runTask([this, &server, uuid = map_data->getMapId()]() {
-            if (!getMapDataMap().contains(uuid)) {
-                return;
-            }
-            if (auto *map = server.getMap(uuid.raw_id)) {
+        server.getEndstoneScheduler().runTask([&server, id = map_data->getMapId().raw_id]() {
+            if (auto *map = server.getMap(id)) {
                 endstone::MapInitializeEvent e{*map};
                 server.getPluginManager().callEvent(e);
             }
@@ -37,11 +34,8 @@ MapItemSavedData *MapDataManager::getMapSavedData(const ActorUniqueID uuid)
     auto *map_data = ENDSTONE_HOOK_CALL_ORIGINAL(&MapDataManager::getMapSavedData, this, uuid);
     if (map_data && !loaded) {
         auto &server = endstone::core::EndstoneServer::getInstance();
-        server.getEndstoneScheduler().runTask([this, &server, uuid = map_data->getMapId()]() {
-            if (!getMapDataMap().contains(uuid)) {
-                return;
-            }
-            if (auto *map = server.getMap(uuid.raw_id)) {
+        server.getEndstoneScheduler().runTask([&server, id = map_data->getMapId().raw_id]() {
+            if (auto *map = server.getMap(id)) {
                 endstone::MapInitializeEvent e{*map};
                 server.getPluginManager().callEvent(e);
             }
